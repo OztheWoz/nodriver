@@ -222,8 +222,8 @@ class Browser:
             )
             self.targets.remove(current_tab)
 
-    async def get(
-        self, url="chrome://welcome", new_tab: bool = False, new_window: bool = False
+        async def get(
+        self, url="chrome://welcome", new_tab: bool = False, new_window: bool = False, background: bool = False
     ) -> tab.Tab:
         """top level get. utilizes the first tab to retrieve given url.
 
@@ -234,13 +234,14 @@ class Browser:
         :param url: the url to navigate to
         :param new_tab: open new tab
         :param new_window:  open new window
+        :param stop_switch_tab: open in background (without focus)
         :return: Page
         """
         if new_tab or new_window:
             # creat new target using the browser session
             target_id = await self.connection.send(
                 cdp.target.create_target(
-                    url, new_window=new_window, enable_begin_frame_control=True
+                    url, new_window=new_window, enable_begin_frame_control=False, background=background
                 )
             )
             # get the connection matching the new target_id from our inventory
