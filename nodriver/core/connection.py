@@ -490,10 +490,10 @@ class Connection(metaclass=CantTouchThis):
             self.enabled_domains.remove(ed)
 
     async def _prepare_headless(self):
-
         if getattr(self, "_prep_headless_done", None):
             return
-        response, error = await self._send_oneshot(
+
+        result = await self._send_oneshot(
             cdp.runtime.evaluate(
                 expression="navigator.userAgent",
                 user_gesture=True,
@@ -502,6 +502,14 @@ class Connection(metaclass=CantTouchThis):
                 allow_unsafe_eval_blocked_by_csp=True,
             )
         )
+
+        if result is None:
+            # Skip user agent override if nothing is returned
+            setattr(self, "_prep_headless_done", True)
+            return
+
+        response, error = result
+
         if response and response.value:
             ua = response.value
             await self._send_oneshot(
@@ -509,6 +517,7 @@ class Connection(metaclass=CantTouchThis):
                     user_agent=ua.replace("Headless", ""),
                 )
             )
+
         setattr(self, "_prep_headless_done", True)
 
     async def _prepare_expert(self):
