@@ -223,27 +223,25 @@ class Browser:
             self.targets.remove(current_tab)
 
     async def get(
-        self, url="chrome://welcome", new_tab: bool = False, new_window: bool = False
+        self,
+        url="chrome://welcome",
+        new_tab: bool = False,
+        new_window: bool = False,
+        background: bool = False,
+        stealth: bool = False
     ) -> tab.Tab:
-        """top level get. utilizes the first tab to retrieve given url.
+        """Top-level get function. Supports stealth mode to evade bot detection."""
 
-        convenience function known from selenium.
-        this function handles waits/sleeps and detects when DOM events fired, so it's the safest
-        way of navigating.
-
-        :param url: the url to navigate to
-        :param new_tab: open new tab
-        :param new_window:  open new window
-        :return: Page
-        """
         if new_tab or new_window:
-            # creat new target using the browser session
             target_id = await self.connection.send(
                 cdp.target.create_target(
-                    url, new_window=new_window, enable_begin_frame_control=True
+                    url,
+                    new_window=new_window,
+                    enable_begin_frame_control=False,
+                    background=background
                 )
             )
-            # get the connection matching the new target_id from our inventory
+
             connection: tab.Tab = next(
                 filter(
                     lambda item: item.type_ == "page" and item.target_id == target_id,
@@ -253,19 +251,29 @@ class Browser:
             connection.browser = self
 
         else:
-            # first tab from browser.tabs
             connection: tab.Tab = next(
                 filter(lambda item: item.type_ == "page", self.targets)
             )
-            # use the tab to navigate to new url
             frame_id, loader_id, *_ = await connection.send(cdp.page.navigate(url))
-            # update the frame_id on the tab
             connection.frame_id = frame_id
             connection.browser = self
 
         await connection.sleep(0.25)
-        return connection
 
+        # Stealth mode: spoof navigator properties & user-agent
+        if stealth:
+            await connection.evaluate("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            """)
+            await connection.send(cdp.network.set_user_agent_override(
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            ))
+
+        return connection
+    
     async def start(self=None) -> Browser:
         """launches the actual browser"""
         if not self:
